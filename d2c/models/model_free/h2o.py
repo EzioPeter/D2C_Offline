@@ -606,9 +606,14 @@ class AgentModule(BaseAgentModule):
         n_q_fns = self._net_modules.n_q_fns  # The number of the Q nets.
         for _ in range(n_q_fns):
             self._q_nets.append(self._net_modules.q_net_factory().to(device))
-        self._q_target_nets = copy.deepcopy(self._q_nets)
+        self._q_target_nets = nn.ModuleList()
+        for q in self._q_nets:
+            target = self._net_modules.q_net_factory().to(device)
+            target.load_state_dict(q.state_dict())
+            self._q_target_nets.append(target)
         self._p_net = self._net_modules.p_net_factory().to(device)
-        self._p_target_net = copy.deepcopy(self._p_net)
+        self._p_target_net = self._net_modules.p_net_factory().to(device)
+        self._p_target_net.load_state_dict(self._p_net.state_dict())
         self._dsa_net = self._net_modules.dsa_net_factory().to(device)
         self._dsas_net = self._net_modules.dsas_net_factory().to(device)
         if automatic_entropy_tuning:
