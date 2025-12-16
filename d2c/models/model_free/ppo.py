@@ -25,7 +25,7 @@ class PPOAgent(BaseAgent):
             self,
             rollout_sim_freq: int = 1000,
             rollout_sim_num: int = 1000,
-            joint_noise_std: float = 0.0,
+            # joint_noise_std: float = 0.0,
             max_traj_length: int = 1000,
             env_seed: int = 42,
             total_timesteps: int = 1000000,
@@ -50,7 +50,7 @@ class PPOAgent(BaseAgent):
     ) -> None:
         self._rollout_sim_freq = rollout_sim_freq
         self._rollout_sim_num = rollout_sim_num
-        self._joint_noise_std = joint_noise_std
+        # self._joint_noise_std = joint_noise_std
         self._max_traj_length = max_traj_length
         self._p_info = collections.OrderedDict()
         self._total_timesteps = total_timesteps
@@ -134,6 +134,8 @@ class PPOAgent(BaseAgent):
         )
         self._current_iteration = 0
         self._total_iterations = 0
+        self._next_obs = None
+        self._next_dones = None
 
     def _build_optimizers(self) -> None:
         opts = self._optimizers
@@ -206,40 +208,45 @@ class PPOAgent(BaseAgent):
         return p_loss, info
 
     def train_step(self) -> None:
-        if self._anneal_lr:
-            frac = 1.0 - (self._current_iteration - 1.0) / self._total_iterations
-            lrnow = frac * self._optimizers.p[1]
-            self._p_optimizer.param_groups[0]['lr'] = lrnow
-            self._q_optimizer.param_groups[0]['lr'] = lrnow
-
         train_batch = self._get_train_batch()
         info = self._optimize_step(train_batch)
         for key, val in info.items():
             self._train_info[key] = val.item()
+        self._global_step += self._num_envs * self._num_steps
 
-    def _get_train_batch(self) -> Dict:
-        for _ in range(self._num_steps):
-            with torch.no_grad():
-                self._traj_steps = 0
-                self._current_state = self._env.reset(seed=self._env_seed) # use it for debug
-                # self._current_state = self._env.reset()
-                for _ in trange(self._rollout_sim_num):
-                    self._traj_steps += 1
-                    state = self._current_state
-                    action = self._p_fn(state)
-                    if self._joint_noise_std > 0:
-                        next_state, reward, done, __ = self._env.step(
-                            action + np.random.randn(action.shape[0], ) * self._joint_noise_std)
-                    else:
-                        next_state, reward, done, __ = self._env.step(action)
+    def _get_train_batch(self) -> Dict:        
+        with torch.no_grad():
+            self._current_state = self._env.reset(seed=self._env_seed) # use it for debug
+            # self._current_state = self._env.reset()
+            self._next_obs = self._current_state
+            self._next_obs = torch.Tensor(self._next_obs).to(self._device)
+            self._next_dones = torch.zeros(self._num_envs,).to(self._device)
 
-                    self._empty_dataset.add(state=state, action=action, next_state=next_state, next_action=0,
-                                            reward=reward, done=done)
-                    self._current_state = next_state
+            if self._anneal_lr:
+                frac = 1.0 - (self._current_iteration - 1.0) / self._total_iterations
+                lrnow = frac * self._optimizers.p[1]
+                self._p_optimizer.param_groups[0]['lr'] = lrnow
+                self._q_optimizer.param_groups[0]['lr'] = lrnow
 
-                    if done or self._traj_steps >= self._max_traj_length:
-                        self._traj_steps = 0
-                        self._current_state = self._env.reset()
+            for step in range(0, self._num_steps):
+                state = self._next_obs
+
+                self._train_data.obs[step] = state
+                self._train_data.dones[step] = self._next_dones
+
+                action, logprob, _, = self._p_fn(state)
+                value = self._q_fns[0](state)
+
+                self._train_data.values[step] = value.flatten()
+                self._train_data.actions[step] = action
+                self._train_data.logprobs[step] = logprob
+
+                next_state, reward, termination, truncations, infos = self._env.step(action.cpu().numpy())
+                done = np.logical_or(termination, truncations)
+                self._next_dones = torch.Tensor(done).to(self._device)
+                self._next_obs = torch.Tensor(next_state).to(self._device)
+
+                self._train_data.rewards[step] = torch.Tensor(reward).to(self._device)
 
         _sim_batch = self._empty_dataset.sample_batch(self._batch_size)
         
