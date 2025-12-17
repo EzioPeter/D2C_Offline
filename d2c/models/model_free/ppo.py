@@ -224,7 +224,8 @@ class PPOAgent(BaseAgent):
 
     def _get_train_batch(self) -> Dict:        
         with torch.no_grad():
-            self._current_state = self._env.reset(seed=self._env_seed) # use it for debug
+            # self._current_state = self._env.reset(seed=self._env_seed) # use it for debug, gym
+            self._current_state, _ = self._env.reset(seed=self._env_seed) # use it for debug, gymnasium
             # self._current_state = self._env.reset()
             self._next_obs = self._current_state
             self._next_obs = torch.Tensor(self._next_obs).to(self._device)
@@ -251,18 +252,28 @@ class PPOAgent(BaseAgent):
                 self._train_data.actions[step] = action
                 self._train_data.logprobs[step] = logprob
 
-                next_state, reward, done, info = self._env.step(action.cpu().numpy())
-                
+                # next_state, reward, done, info = self._env.step(action.cpu().numpy()) # gym
+                next_state, reward, termination, truncation, infos = self._env.step(action.cpu().numpy()) # gymnasium
+                done = np.logical_or(termination, truncation)
+
                 self._next_dones = torch.Tensor(done).to(self._device)
                 self._next_obs = torch.Tensor(next_state).to(self._device)
 
                 self._train_data.rewards[step] = torch.Tensor(reward).to(self._device)
 
-                if done.any():
-                    print(f"Episode done at step {self._global_step}, reward: {self._episode_rewards}")
-                    self._episode_rewards = 0.0
-                else:
-                    self._episode_rewards += reward
+                # if done.any():
+                #     self._episode_rewards += reward
+                #     print(f"Episode done at step {self._global_step}, reward: {self._episode_rewards}")
+                #     self._episode_rewards = 0.0
+                # else:
+                #     self._episode_rewards += reward
+
+                if "final_info" in infos:
+                    for info in infos["final_info"]:
+                        if info and "episode" in info:
+                            print(f"global_step={self._global_step}, episodic_return={info['episode']['r']}")
+                            # writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
+                            # writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
 
         batch = self._train_data.get_flat_batch()
         
