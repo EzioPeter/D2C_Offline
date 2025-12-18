@@ -142,7 +142,7 @@ class PPOAgent(BaseAgent):
     def _build_optimizers(self) -> None:
         opts = self._optimizers
         self._optimizer = utils.get_optimizer(opts.p[0])(
-            parameters=list(list(self._q_fns[0].parameters()) + list(self._p_fn.parameters())),
+            parameters=list(self._q_fns[0].parameters()) + list(self._p_fn.parameters()),
             lr=opts.p[1],
             weight_decay=self._weight_decays,
         )
@@ -207,17 +207,9 @@ class PPOAgent(BaseAgent):
         info = self._optimize_step(train_batch)
         for key, val in info.items():
             self._train_info[key] = val.item()
-        # self._global_step += self._num_envs * self._num_steps
 
     def _get_train_batch(self) -> Dict:        
         with torch.no_grad():
-            # # self._current_state = self._env.reset(seed=self._env_seed) # use it for debug, gym
-            # self._current_state, _ = self._env.reset(seed=self._env_seed) # use it for debug, gymnasium
-            # # self._current_state = self._env.reset()
-            # self._next_obs = self._current_state
-            # self._next_obs = torch.Tensor(self._next_obs).to(self._device)
-            # self._next_dones = torch.zeros(self._num_envs,).to(self._device)
-
             if self._anneal_lr:
                 frac = 1.0 - (self._current_iteration - 1.0) / self._total_iterations
                 lrnow = frac * self._optimizers.p[1]
@@ -237,8 +229,7 @@ class PPOAgent(BaseAgent):
                 self._train_data.actions[step] = action
                 self._train_data.logprobs[step] = logprob
 
-                # next_state, reward, done, info = self._env.step(action.cpu().numpy()) # gym
-                next_state, reward, termination, truncation, infos = self._env.step(action.cpu().numpy()) # gymnasium
+                next_state, reward, termination, truncation, infos = self._env.step(action.cpu().numpy())
                 done = np.logical_or(termination, truncation)
 
                 self._next_dones = torch.Tensor(done).to(self._device)
@@ -251,14 +242,19 @@ class PPOAgent(BaseAgent):
                         if info and "episode" in info:
                             print(f"global_step={self._global_step}, episodic_return={info['episode']['r']}")
 
-        batch = self._train_data.get_flat_batch()
+        batch = self._train_data.get_batch()
         
         return batch
 
     def _optimize_step(self, batch: Dict) -> Dict:
         info = collections.OrderedDict()
-
-        b_obs, b_logprobs, b_actions, b_advantages, b_returns, b_values = self.get_training_batch(batch)
+        b_batch = self.get_training_batch(batch)
+        b_obs = b_batch['s1']
+        b_logprobs = b_batch['logprob']
+        b_actions = b_batch['a1']
+        b_advantages = b_batch['advantage']
+        b_returns = b_batch['return']
+        b_values = b_batch['value']
 
         b_inds = np.arange(self._batch_size)
         clipfracs = []
@@ -270,14 +266,9 @@ class PPOAgent(BaseAgent):
                 mb_inds = b_inds[start:end]
 
                 _, newlogprobs, entropy = self._p_fn(b_obs[mb_inds], b_actions[mb_inds])
-                newvalue = self._q_fns[0](b_obs[mb_inds])
                 logratio = newlogprobs - b_logprobs[mb_inds]
                 ratio = logratio.exp()
-
-                with torch.no_grad():
-                    old_approx_kl = (-logratio).mean()
-                    approx_kl = ((ratio - 1) - logratio).mean()
-                    clipfracs += [((ratio - 1.0).abs() > self._clip_coef).float().mean().item()]
+                old_approx_kl, approx_kl, clipfracs = self.compute_kl(logratio)
 
                 mb_advantages = b_advantages[mb_inds]
                 if self._norm_adv:
@@ -287,6 +278,7 @@ class PPOAgent(BaseAgent):
                 pg_loss2 = -mb_advantages * torch.clamp(ratio, 1 - self._clip_coef, 1 +  self._clip_coef)
                 pg_loss = torch.max(pg_loss1, pg_loss2).mean()
 
+                newvalue = self._q_fns[0](b_obs[mb_inds])
                 newvalue = newvalue.view(-1)
                 if self._clip_vloss:
                     v_loss_unclipped = (newvalue - b_returns[mb_inds]) ** 2
@@ -307,7 +299,7 @@ class PPOAgent(BaseAgent):
                 self._optimizer.zero_grad()
 
                 loss.backward()
-                nn.utils.clip_grad_norm_(list(list(self._q_fns[0].parameters()) + list(self._p_fn.parameters())), self._max_grad_norm)
+                nn.utils.clip_grad_norm_(list(self._q_fns[0].parameters()) + list(self._p_fn.parameters()), self._max_grad_norm)
                 self._optimizer.step()
 
             if self._target_kl is not None and old_approx_kl > self._target_kl:
@@ -333,22 +325,40 @@ class PPOAgent(BaseAgent):
                     nextnonterminal = 1.0 - self._next_dones
                     nextvalues = next_values
                 else:
-                    nextnonterminal = 1.0 - batch['dones'][t + 1]
-                    nextvalues = batch['values'][t + 1]
-                delta = batch['reward'][t] + self._discount * nextvalues * nextnonterminal - batch['values'][t]
+                    nextnonterminal = 1.0 - batch['done'][t + 1]
+                    nextvalues = batch['value'][t + 1]
+                delta = batch['reward'][t] + self._discount * nextvalues * nextnonterminal - batch['value'][t]
                 advantages[t] = lastgaelam = delta + self._discount * self._gae_lambda * nextnonterminal * lastgaelam
-            returns = advantages + batch['values']
+            returns = advantages + batch['value']
         return advantages, returns
 
+    def compute_kl(self, logratio: Tensor) -> Tensor:
+        ratio = logratio.exp()
+        clipfracs = []
+        with torch.no_grad():
+            old_approx_kl = (-logratio).mean()
+            approx_kl = ((ratio - 1) - logratio).mean()
+            clipfracs += [((ratio - 1.0).abs() > self._clip_coef).float().mean().item()]
+        return old_approx_kl, approx_kl, clipfracs
+
     def get_training_batch(self, batch: Dict) -> Dict:
-        training_batch_obs = batch['obs'].reshape((-1,) + self._observation_space.shape)
-        training_batch_logprobs = batch['logprobs'].reshape(-1)
-        training_batch_actions = batch['actions'].reshape((-1,) + self._action_space.shape)
+        training_batch_obs = batch['s1'].reshape((-1,) + self._observation_space.shape)
+        training_batch_logprobs = batch['logprob'].reshape(-1)
+        training_batch_actions = batch['a1'].reshape((-1,) + self._action_space.shape)
         advantages, returns = self.get_advantage(batch)
         training_advantages = advantages.reshape(-1)
         training_returns = returns.reshape(-1)
-        training_values = batch['values'].reshape(-1)
-        return training_batch_obs, training_batch_logprobs, training_batch_actions, training_advantages, training_returns, training_values
+        training_values = batch['value'].reshape(-1)
+        return collections.OrderedDict(
+            [
+                ("s1", training_batch_obs),
+                ("a1", training_batch_actions),
+                ("logprob", training_batch_logprobs),
+                ("advantage", training_advantages),
+                ("return", training_returns),
+                ("value", training_values),
+            ]
+        )
 
     def save(self, ckpt_name: str) -> None:
         pass
