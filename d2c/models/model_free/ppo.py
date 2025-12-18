@@ -181,7 +181,7 @@ class PPOAgent(BaseAgent):
         _, newlogprobs, entropy = self._p_fn(b_obs[mb_inds], b_actions[mb_inds])
         logratio = newlogprobs - b_logprobs[mb_inds]
         ratio = logratio.exp()
-        old_approx_kl, approx_kl, clipfracs = self.compute_kl(logratio)
+        old_approx_kl, approx_kl, clipfracs = self.calculate_kl(logratio)
 
         mb_advantages = b_advantages[mb_inds]
         if self._norm_adv:
@@ -272,13 +272,12 @@ class PPOAgent(BaseAgent):
             if self._target_kl is not None and old_approx_kl > self._target_kl:
                 break
 
-        y_pred, y_true = b_batch['value'].cpu().numpy(), b_batch['return'].cpu().numpy()
-        var_y = np.var(y_true)
-        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+        explained_var_info =self.calculate_explained_variance(b_batch)
 
+        info['global_step'] = torch.tensor(self._global_step)
         info.update(p_info)
         info.update(q_info)
-        info['explained_variance'] = explained_var
+        info.update(explained_var_info)
         
         return info
     
@@ -303,7 +302,7 @@ class PPOAgent(BaseAgent):
             returns = advantages + batch['value']
         return advantages, returns
 
-    def compute_kl(self, logratio: Tensor) -> Tensor:
+    def calculate_kl(self, logratio: Tensor) -> Tensor:
         ratio = logratio.exp()
         clipfracs = []
         with torch.no_grad():
@@ -311,6 +310,15 @@ class PPOAgent(BaseAgent):
             approx_kl = ((ratio - 1) - logratio).mean()
             clipfracs += [((ratio - 1.0).abs() > self._clip_coef).float().mean().item()]
         return old_approx_kl, approx_kl, clipfracs
+
+    def calculate_explained_variance(self, batch: Dict) -> Dict:
+        info = collections.OrderedDict()
+        y_pred, y_true = batch['value'].cpu().numpy(), batch['return'].cpu().numpy()
+        var_y = np.var(y_true)
+        explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
+
+        info['explained_variance'] = explained_var
+        return info
 
     def get_training_batch(self, batch: Dict) -> Dict:
         training_batch_obs = batch['s1'].reshape((-1,) + self._observation_space.shape)
