@@ -202,6 +202,23 @@ class OnPolicyTransitions:
             ]
         )
 
+    def get_batch(self) -> dict:
+        """Get all tensors as a dictionary without flattening.
+
+        Returns:
+            Dictionary with keys: 'obs', 'actions', 'logprobs', 'rewards', 'dones', 'values'.
+        """
+        return OrderedDict(
+            [
+                ("s1", self.obs),
+                ("a1", self.actions),
+                ("logprob", self.logprobs),
+                ("reward", self.rewards),
+                ("done", self.dones),
+                ("value", self.values),
+            ]
+        )
+
     def clear(self) -> None:
         """Reset all buffers to zero (useful for sequential collection)."""
         self.obs.zero_()

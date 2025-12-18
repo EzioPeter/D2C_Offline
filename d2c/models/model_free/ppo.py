@@ -242,7 +242,8 @@ class PPOAgent(BaseAgent):
                         if info and "episode" in info:
                             print(f"global_step={self._global_step}, episodic_return={info['episode']['r']}")
 
-        batch = self._train_data.get_flat_batch()
+        # batch = self._train_data.get_flat_batch()
+        batch = self._train_data.get_batch()
         
         return batch
 
@@ -324,21 +325,21 @@ class PPOAgent(BaseAgent):
                     nextnonterminal = 1.0 - self._next_dones
                     nextvalues = next_values
                 else:
-                    nextnonterminal = 1.0 - batch['dones'][t + 1]
-                    nextvalues = batch['values'][t + 1]
-                delta = batch['reward'][t] + self._discount * nextvalues * nextnonterminal - batch['values'][t]
+                    nextnonterminal = 1.0 - batch['done'][t + 1]
+                    nextvalues = batch['value'][t + 1]
+                delta = batch['reward'][t] + self._discount * nextvalues * nextnonterminal - batch['value'][t]
                 advantages[t] = lastgaelam = delta + self._discount * self._gae_lambda * nextnonterminal * lastgaelam
-            returns = advantages + batch['values']
+            returns = advantages + batch['value']
         return advantages, returns
 
     def get_training_batch(self, batch: Dict) -> Dict:
-        training_batch_obs = batch['obs'].reshape((-1,) + self._observation_space.shape)
-        training_batch_logprobs = batch['logprobs'].reshape(-1)
-        training_batch_actions = batch['actions'].reshape((-1,) + self._action_space.shape)
+        training_batch_obs = batch['s1'].reshape((-1,) + self._observation_space.shape)
+        training_batch_logprobs = batch['logprob'].reshape(-1)
+        training_batch_actions = batch['a1'].reshape((-1,) + self._action_space.shape)
         advantages, returns = self.get_advantage(batch)
         training_advantages = advantages.reshape(-1)
         training_returns = returns.reshape(-1)
-        training_values = batch['values'].reshape(-1)
+        training_values = batch['value'].reshape(-1)
         return training_batch_obs, training_batch_logprobs, training_batch_actions, training_advantages, training_returns, training_values
 
     def save(self, ckpt_name: str) -> None:
