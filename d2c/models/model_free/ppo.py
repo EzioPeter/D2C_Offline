@@ -242,7 +242,6 @@ class PPOAgent(BaseAgent):
                         if info and "episode" in info:
                             print(f"global_step={self._global_step}, episodic_return={info['episode']['r']}")
 
-        # batch = self._train_data.get_flat_batch()
         batch = self._train_data.get_batch()
         
         return batch
