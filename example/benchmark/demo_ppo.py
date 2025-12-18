@@ -7,7 +7,7 @@ from d2c.trainers import OnPolicyTrainer as Trainer
 from d2c.models import make_agent
 from d2c.envs import benchmark_env, LeaEnv
 from d2c.data import Data
-from d2c.evaluators import bm_eval
+from d2c.evaluators import bm_eval, onpolicy_bm_eval
 from example.benchmark.config import make_config
 
 # If you live in China mainland and want to use wandb, you can use this wandb mirror to solve the problem of network.
@@ -25,9 +25,6 @@ from dataclasses import dataclass
 @dataclass
 class Args:
     env_name: str = 'HalfCheetah-v2'
-    data_name: str = 'halfcheetah_medium_replay-v2'
-    unreal_dynamics: str = 'gravity'
-    variety_degree: float = 2.0
 
 def main(args: Args):
     seed = np.random.randint(0, 100) 
@@ -37,15 +34,11 @@ def main(args: Args):
         prefix + 'benchmark_name': 'gym',
         prefix + 'data_source': 'mujoco',
         prefix + 'env_name': 'HalfCheetah-v2',
-        prefix + 'data_name': 'halfcheetah_medium_replay-v2',
-        prefix + 'unreal_dynamics': 'gravity', # gravity, friction or joint_noise
-        prefix + 'variety_degree': 2.0, # multiplier on gravity acceleration, friction coefficient or joint_noise std
         prefix + 'state_normalize': False,
-        prefix + 'score_normalize': True,
+        prefix + 'score_normalize': False,
     }
     command_args.update({
         'model.model_name': 'ppo',
-        'train.data_loader_name': None,
         'train.device': device,
         'train.seed': 42,
         'train.total_train_steps': 1000000,
@@ -54,13 +47,10 @@ def main(args: Args):
     })
     command_args.update({
         prefix + 'env_name': args.env_name,
-        prefix + 'data_name': args.data_name,
-        prefix + 'unreal_dynamics': args.unreal_dynamics,
-        prefix + 'variety_degree': args.variety_degree,
     })
     wandb = {
         'project': 'test',
-        'name': command_args['env.external.data_name']+'_'+command_args['env.external.unreal_dynamics']+'x'+str(command_args['env.external.variety_degree'])+'_seed='+str(command_args['train.seed'])+'_'+nowTime,
+        'name': command_args['env.external.env_name']+'_seed='+str(command_args['train.seed'])+'_'+nowTime,
         'reinit': False,
         'mode': 'online'
     }
@@ -72,7 +62,7 @@ def main(args: Args):
     # agent with an empty buffer
     agent = make_agent(config=config, env=env, data=None)
     # envaluate in the real env
-    evaluator = bm_eval(agent=agent, env=env, config=config)
+    evaluator = onpolicy_bm_eval(agent=agent, env=env, config=config)
     # train in the sim env
     trainer = Trainer(agent=agent, train_data=None, config=config, env=env, evaluator=evaluator)
     trainer.train()

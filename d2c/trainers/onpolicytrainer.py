@@ -74,13 +74,7 @@ class OnPolicyTrainer(BaseTrainer):
 
         time_st_total = time.time()
         iteration = 0
-        total_iterations = self._train_steps // self._agent._batch_size
-
-        self._agent._current_state, _ = self._agent._env.reset(seed=self._agent._env_seed) # use it for debug, gymnasium
-        # self._current_state = self._env.reset()
-        self._agent._next_obs = self._agent._current_state
-        self._agent._next_obs = torch.Tensor(self._agent._next_obs).to(self._agent._device)
-        self._agent._next_dones = torch.zeros(self._agent._num_envs,).to(self._agent._device)
+        total_iterations = self._agent._prepare_for_train(self._train_steps)
 
         while iteration < total_iterations + 1:
             iteration = iteration + 1
@@ -89,23 +83,23 @@ class OnPolicyTrainer(BaseTrainer):
             self._agent.train_step()
             if iteration % self._summary_freq == 0 or iteration == self._train_steps:
                 self._agent.write_train_summary(train_summary_writer)
-            # if iteration % self._print_freq == 0 or iteration == self._train_steps:
-            #     self._agent.print_train_info()
-            # if iteration % self._eval_freq == 0 or iteration == self._train_steps:
-            #     if self._evaluator is not None:
-            #         try:
-            #             eval_info = self._evaluator.eval(iteration)
-            #         except:
-            #             logging.info('Something wrong when evaluating the policy!')
-            #         else:
-            #             eval_info.update(global_step=iteration)
-            #             wandb_logger.write_summary(eval_info)
-            #         if iteration == self._train_steps:
-            #             self._evaluator.save_eval_results()
-            # if iteration % self._save_freq == 0:
-            #     self._agent.save(agent_ckpt_dir)
-            #     logging.info(f'Agent saved at {agent_ckpt_dir}.')
-        # self._agent.save(agent_ckpt_dir)
+            if iteration % self._print_freq == 0 or iteration == self._train_steps:
+                self._agent.print_train_info()
+            if iteration % self._eval_freq == 0 or iteration == self._train_steps:
+                if self._evaluator is not None:
+                    try:
+                        eval_info = self._evaluator.eval(self._agent._global_step)
+                    except:
+                        logging.info('Something wrong when evaluating the policy!')
+                    else:
+                        eval_info.update(global_step=self._agent._global_step)
+                        wandb_logger.write_summary(eval_info)
+                    if self._agent._global_step == self._train_steps:
+                        self._evaluator.save_eval_results()
+            if iteration % self._save_freq == 0:
+                self._agent.save(agent_ckpt_dir)
+                logging.info(f'Agent saved at {agent_ckpt_dir}.')
+        self._agent.save(agent_ckpt_dir)
         train_summary_writer.close()
         wandb_logger.finish()
         time_cost = time.time() - time_st_total
