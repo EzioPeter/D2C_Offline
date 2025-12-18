@@ -35,7 +35,7 @@ def main(args: Args):
         prefix + 'data_source': 'mujoco',
         prefix + 'env_name': 'HalfCheetah-v2',
         prefix + 'state_normalize': False,
-        prefix + 'score_normalize': True,
+        prefix + 'score_normalize': False,
     }
     command_args.update({
         'model.model_name': 'ppo',
@@ -52,7 +52,7 @@ def main(args: Args):
         'project': 'test',
         'name': command_args['env.external.env_name']+'_seed='+str(command_args['train.seed'])+'_'+nowTime,
         'reinit': False,
-        'mode': 'online'
+        'mode': 'offline'
     }
     command_args.update({'train.wandb': wandb})
 
