@@ -245,8 +245,7 @@ class PPOAgent(BaseAgent):
         
         return batch
 
-    def _optimize_step(self, batch: Dict) -> Dict:
-        info = collections.OrderedDict()
+    def _optimize_step(self, batch: Dict) -> Dict: 
         b_batch = self.get_training_batch(batch)
 
         b_inds = np.arange(self._batch_size)
@@ -274,6 +273,7 @@ class PPOAgent(BaseAgent):
 
         explained_var_info =self.calculate_explained_variance(b_batch)
 
+        info = collections.OrderedDict()
         info['global_step'] = torch.tensor(self._global_step)
         info.update(p_info)
         info.update(q_info)
@@ -312,11 +312,11 @@ class PPOAgent(BaseAgent):
         return old_approx_kl, approx_kl, clipfracs
 
     def calculate_explained_variance(self, batch: Dict) -> Dict:
-        info = collections.OrderedDict()
         y_pred, y_true = batch['value'].cpu().numpy(), batch['return'].cpu().numpy()
         var_y = np.var(y_true)
         explained_var = np.nan if var_y == 0 else 1 - np.var(y_true - y_pred) / var_y
 
+        info = collections.OrderedDict()
         info['explained_variance'] = explained_var
         return info
 
