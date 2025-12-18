@@ -1,11 +1,11 @@
-import gym
+import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
 from torch.distributions.normal import Normal
 from typing import Tuple, List, Union, Type, Optional, Sequence
-from gym.spaces import Box, Space
+from gymnasium.spaces import Box, Space
 
 def make_env(env_id, idx, capture_video, run_name, gamma):
     def thunk():
