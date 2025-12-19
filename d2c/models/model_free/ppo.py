@@ -140,12 +140,21 @@ class PPOAgent(BaseAgent):
 
     def _build_optimizers(self) -> None:
         opts = self._optimizers
-        self._optimizer = utils.get_optimizer(opts.p[0])(
-            parameters=list(self._q_fns[0].parameters()) + list(self._p_fn.parameters()),
+
+        self._p_optimizer = utils.get_optimizer(opts.p[0])(
+            parameters=self._p_fn.parameters(),
             lr=opts.p[1],
             weight_decay=self._weight_decays,
         )
-        self._optimizer.param_groups[0]['eps']=1e-5
+
+        self._q_optimizer = utils.get_optimizer(opts.q[0])(
+            parameters=self._q_fns[0].parameters(),
+            lr=opts.q[1],
+            weight_decay=self._weight_decays,
+        )
+
+        self._p_optimizer.param_groups[0]['eps']=opts.p[2]
+        self._q_optimizer.param_groups[0]['eps']=opts.q[2]
 
     def _build_q_loss(self, batch: Dict, mb_inds: np.ndarray) -> Tuple[Tensor, Dict]:
         b_obs = batch['s1']
@@ -211,7 +220,8 @@ class PPOAgent(BaseAgent):
             if self._anneal_lr:
                 frac = 1.0 - (self._current_iteration - 1.0) / self._total_iterations
                 lrnow = frac * self._optimizers.p[1]
-                self._optimizer.param_groups[0]['lr'] = lrnow
+                self._p_optimizer.param_groups[0]['lr'] = lrnow
+                self._q_optimizer.param_groups[0]['lr'] = lrnow
 
             for step in range(0, self._num_steps):
                 self._global_step += self._num_envs
@@ -256,11 +266,13 @@ class PPOAgent(BaseAgent):
 
                 loss = pg_loss - self._ent_coef * entropy_loss + self._vf_coef * v_loss
 
-                self._optimizer.zero_grad()
-
+                self._p_optimizer.zero_grad()
+                self._q_optimizer.zero_grad()
                 loss.backward()
-                nn.utils.clip_grad_norm_(list(self._q_fns[0].parameters()) + list(self._p_fn.parameters()), self._max_grad_norm)
-                self._optimizer.step()
+                nn.utils.clip_grad_norm_(self._p_fn.parameters(), self._max_grad_norm)
+                nn.utils.clip_grad_norm_(self._q_fns[0].parameters(), self._max_grad_norm)
+                self._p_optimizer.step()
+                self._q_optimizer.step()
 
             if self._target_kl is not None and old_approx_kl > self._target_kl:
                 break

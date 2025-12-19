@@ -6,7 +6,7 @@ import time
 import numpy as np
 import torch
 from typing import Dict, Generator, List, Callable, Union
-from gym.spaces import Space, Box
+from gymnasium.spaces import Space, Box
 
 
 def get_summary_str(step: int = None, info: Dict = None, prefix: str = '') -> str:

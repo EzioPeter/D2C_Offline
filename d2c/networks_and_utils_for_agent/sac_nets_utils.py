@@ -6,7 +6,7 @@ from torch.distributions import Normal
 from torch.distributions.transformed_distribution import TransformedDistribution
 from torch.distributions.transforms import TanhTransform
 from typing import Tuple, List, Union, Type, Optional, Sequence
-from gym.spaces import Box, Space
+from gymnasium.spaces import Box, Space
 
 def extend_and_repeat(tensor, dim, repeat):
     ones_shape = [1 for _ in range(tensor.ndim + 1)]
