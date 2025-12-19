@@ -34,6 +34,7 @@ def main(args: Args):
         prefix + 'benchmark_name': 'gym',
         prefix + 'data_source': 'mujoco',
         prefix + 'env_name': 'HalfCheetah-v2',
+        prefix + 'data_name': '',
         prefix + 'state_normalize': False,
         prefix + 'score_normalize': False,
     }
@@ -50,7 +51,7 @@ def main(args: Args):
     })
     wandb = {
         'project': 'test',
-        'name': command_args['env.external.env_name']+'_seed='+str(command_args['train.seed'])+'_'+nowTime,
+        'name': 'dependent_p_q_optimizers_'+command_args['env.external.env_name']+'_seed='+str(command_args['train.seed'])+'_'+nowTime,
         'reinit': False,
         'mode': 'online'
     }
