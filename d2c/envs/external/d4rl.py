@@ -1,8 +1,8 @@
 """An implementation of the Env for D4RL benchmark."""
 
-import gym
+import gymnasium as gym
 import numpy as np
-from gym.spaces import Space
+from gymnasium.spaces import Space
 from typing import Tuple, Any, Union
 from d2c.envs import BaseEnv
 from d2c.utils.wrappers import wrapped_norm_obs_env

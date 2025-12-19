@@ -1,9 +1,9 @@
 """A collection of gym wrappers."""
 
-import gym
+import gymnasium as gym
 import logging
 import numpy as np
-from gym import spaces
+from gymnasium import spaces
 
 
 def wrapped_norm_obs_env(

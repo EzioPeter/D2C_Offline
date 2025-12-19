@@ -3,7 +3,7 @@
 import torch
 import numpy as np
 import torch.nn.functional as F
-from gym.spaces import Box, Space
+from gymnasium.spaces import Box, Space
 from torch import nn, Tensor
 from typing import Tuple, List, Union, Type, Optional, Sequence
 from torch.distributions import Normal, TransformedDistribution, Distribution

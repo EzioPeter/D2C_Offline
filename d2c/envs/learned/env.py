@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch import Tensor
 from typing import Any, Union, Optional, Tuple, List
-from gym.spaces import Space, Box
+from gymnasium.spaces import Space, Box
 from d2c.envs import BaseEnv
 from d2c.envs.learned.dynamics import DYNA_DICT
 from d2c.envs.learned.dynamics import make_dynamics

@@ -1,6 +1,6 @@
 """The base class of Env."""
-import gym
-from gym.utils import seeding
+import gymnasium as gym
+from gymnasium.utils import seeding
 from typing import Union, Optional, TypeVar, Tuple
 from abc import ABC, abstractmethod
 
