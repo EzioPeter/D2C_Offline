@@ -355,12 +355,9 @@ class SACAgent(BaseAgent):
                         self._alpha_optimizer.step()
                         self._alpha = self._log_alpha_fn.exp().item()
 
-            # update the target networks
             if self._global_step % self._target_update_period == 0:
-                for param, target_param in zip(self._q_fns[0].parameters(), self._q_target_fns[0].parameters()):
-                    target_param.data.copy_(self._update_rate * param.data + (1 - self._update_rate) * target_param.data)
-                for param, target_param in zip(self._q_fns[1].parameters(), self._q_target_fns[1].parameters()):
-                    target_param.data.copy_(self._update_rate * param.data + (1 - self._update_rate) * target_param.data)                
+                self._update_target_fns(self._q_fns, self._q_target_fns)
+                self._update_target_fns(self._p_fn, self._p_target_fn)         
         return info
     
     def _build_test_policies(self) -> None:
