@@ -105,8 +105,8 @@ class SACAgent(BaseAgent):
         self._q_target_fns = self._agent_module.q_target_nets
         self._p_fn = self._agent_module.p_net
         self._p_target_fn = self._agent_module.p_target_net
-        # if self._automatic_entropy_tuning:
-        #     self._log_alpha_fn = self._agent_module.log_alpha_net
+        if self._automatic_entropy_tuning:
+            self._log_alpha_fn = self._agent_module.log_alpha_net
 
     def _init_vars(self) -> None:
         self._observation_space = self._env._env.single_observation_space
@@ -135,7 +135,6 @@ class SACAgent(BaseAgent):
             weight_decay=self._weight_decays,
         )
         if self._automatic_entropy_tuning:
-            self._log_alpha_fn = torch.zeros(1, requires_grad=True, device=self._device)
             self._alpha_optimizer = utils.get_optimizer(opts.alpha[0])(
                 parameters=[self._log_alpha_fn],
                 lr=1e-3,
@@ -356,12 +355,9 @@ class SACAgent(BaseAgent):
                         self._alpha_optimizer.step()
                         self._alpha = self._log_alpha_fn.exp().item()
 
-            # update the target networks
             if self._global_step % self._target_update_period == 0:
-                for param, target_param in zip(self._q_fns[0].parameters(), self._q_target_fns[0].parameters()):
-                    target_param.data.copy_(self._update_rate * param.data + (1 - self._update_rate) * target_param.data)
-                for param, target_param in zip(self._q_fns[1].parameters(), self._q_target_fns[1].parameters()):
-                    target_param.data.copy_(self._update_rate * param.data + (1 - self._update_rate) * target_param.data)                
+                self._update_target_fns(self._q_fns, self._q_target_fns)
+                self._update_target_fns(self._p_fn, self._p_target_fn)         
         return info
     
     def _build_test_policies(self) -> None:
@@ -384,17 +380,13 @@ class AgentModule(BaseAgentModule):
         n_q_fns = self._net_modules.n_q_fns
         for _ in range(n_q_fns):
             self._q_nets.append(self._net_modules.q_net_factory().to(device))
-        # self._q_target_nets = copy.deepcopy(self._q_nets)    
-        # self._p_target_net = copy.deepcopy(self._p_net)
         for i in range(n_q_fns):
             self._q_target_nets.append(self._net_modules.q_net_factory().to(device))
             self._q_target_nets[i].load_state_dict(self._q_nets[i].state_dict())
-        # self._p_target_net = self._net_modules.p_net_factory().to(device)
-        # self._p_target_net.load_state_dict(self._p_net.state_dict())
         self._p_target_net = self._net_modules.p_net_factory().to(device)
         self._p_target_net.load_state_dict(self._p_net.state_dict())
-        # if automatic_entropy_tuning:
-        #     self._log_alpha_net = self._net_modules.log_alpha_net_factory().to(device)
+        if automatic_entropy_tuning:
+            self._log_alpha_net = torch.zeros(1, requires_grad=True, device=device)
         
     @property
     def q_nets(self) -> nn.ModuleList:
