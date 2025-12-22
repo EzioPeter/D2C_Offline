@@ -11,7 +11,8 @@ def d4rl_env(config: Any, **kwargs: Any) -> D4rlEnv:
 
 def gym_env(config: Any, **kwargs: Any) -> GymEnv:
     env_name = config.model_config.env.external.env_name
-    return GymEnv(env_name)
+    model_name = config.model_config.model.model_name
+    return GymEnv(env_name, model_name)
 
 ENV_DICT = {
     'd4rl': D4rlEnv,
