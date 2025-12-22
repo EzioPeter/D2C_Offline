@@ -120,6 +120,7 @@ class SACAgent(BaseAgent):
             handle_timeout_termination=False,
         )
         self._current_state = None
+        self._observation_space.dtype = np.float32
 
     def _build_optimizers(self) -> None:
         opts = self._optimizers
@@ -252,7 +253,8 @@ class SACAgent(BaseAgent):
 
         # _sim_batch = self._empty_dataset.sample_batch(self._batch_size)
         obs = self._current_state
-        if self._global_step < self._learning_starts:
+        # if self._global_step < self._learning_starts:
+        if False:
             actions = np.array([self._action_space.sample() for _ in range(self._num_envs)])
         else:
             actions, _, _ = self._p_fn.get_action(torch.Tensor(obs).to(self._device))
@@ -311,11 +313,12 @@ class SACAgent(BaseAgent):
         # info.update(self._p_info)
 
         if self._global_step > self._learning_starts:
+        # if False:
             with torch.no_grad():
                 next_obs = batch.next_observations.float()
                 next_state_actions, next_state_log_pi, _ = self._p_fn.get_action(next_obs)
-                qf1_next_target = self._q_fns[0](next_obs, next_state_actions)
-                qf2_next_target = self._q_fns[1](next_obs, next_state_actions)
+                qf1_next_target = self._q_target_fns[0](next_obs, next_state_actions)
+                qf2_next_target = self._q_target_fns[1](next_obs, next_state_actions)
                 min_qf_next_target = torch.min(qf1_next_target, qf2_next_target) - self._log_alpha_fn.exp() * next_state_log_pi
                 next_q_value = batch.rewards.flatten() + (1 - batch.dones.flatten()) * self._discount * (min_qf_next_target).view(-1)
 
