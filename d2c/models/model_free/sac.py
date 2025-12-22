@@ -29,6 +29,7 @@ class SACAgent(BaseAgent):
             rollout_sim_num: int = 1000,            
             reward_scale: float = 1.0,
             alpha_multiplier: float = 1.0,
+            alpha_init_value: float = 0.2,
             automatic_entropy_tuning: bool = True,
             log_alpha_init_value: float = 0.0,
             backup_entropy: bool = True,
@@ -48,6 +49,7 @@ class SACAgent(BaseAgent):
         self._rollout_sim_num = rollout_sim_num
         self._reward_scale = reward_scale
         self._alpha_multiplier = alpha_multiplier
+        self._alpha_init_value = alpha_init_value
         self._automatic_entropy_tuning = automatic_entropy_tuning
         self._log_alpha_init_value = log_alpha_init_value
         self._backup_entropy = backup_entropy
@@ -141,7 +143,7 @@ class SACAgent(BaseAgent):
                 weight_decay=self._weight_decays,
             )
         else:
-            self._alpha = 0.2
+            self._alpha = self._alpha_init_value
     
     def _build_alpha_loss(self, batch: Dict) -> Tuple:
         states = batch['s1']
