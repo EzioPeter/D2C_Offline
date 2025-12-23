@@ -13,6 +13,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         'gymnasium==0.28.1',
+        'gymnasium[mujoco]',
         'numpy',
         'pandas',
         'torch==2.4.0',
