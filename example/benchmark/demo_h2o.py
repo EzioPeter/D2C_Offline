@@ -3,11 +3,11 @@ import datetime
 sys.path.append('../../')
 import torch
 import logging
-from d2c.trainers import Trainer
+from d2c.trainers import OffPolicyTrainer as Trainer
 from d2c.models import make_agent
-from d2c.envs import benchmark_env, LeaEnv
+from d2c.envs import benchmark_env
 from d2c.data import Data
-from d2c.evaluators import bm_eval
+from d2c.evaluators import offpolicy_bm_eval
 from d2c.utils.utils import update_source_env_gravity, update_source_env_friction, update_source_env_density, update_source_env_short_thigh, update_source_env_thigh_range, update_source_env_torso_length
 from example.benchmark.config import make_config
 
@@ -19,7 +19,6 @@ logging.basicConfig(level=logging.INFO)
 nowTime = datetime.datetime.now().strftime('%y-%m-%d-%H-%M-%S')
 
 import numpy as np
-import random
 import tyro
 from dataclasses import dataclass
 
@@ -29,20 +28,21 @@ class Args:
     data_name: str = 'halfcheetah_medium_replay-v2'
     unreal_dynamics: str = 'gravity'
     variety_degree: float = 2.0
+    wandb_mode: str = 'online'
 
 def main(args: Args):
     seed = np.random.randint(0, 100) 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     prefix = 'env.external.'
     command_args = {
-        prefix + 'benchmark_name': 'd4rl',
+        prefix + 'benchmark_name': 'gym',
         prefix + 'data_source': 'mujoco',
         prefix + 'env_name': 'HalfCheetah-v2',
         prefix + 'data_name': 'halfcheetah_medium_replay-v2',
         prefix + 'unreal_dynamics': 'gravity', # gravity, friction or joint_noise
         prefix + 'variety_degree': 2.0, # multiplier on gravity acceleration, friction coefficient or joint_noise std
         prefix + 'state_normalize': False,
-        prefix + 'score_normalize': True,
+        prefix + 'score_normalize': False,
     }
     command_args.update({
         'model.model_name': 'h2o',
@@ -50,7 +50,7 @@ def main(args: Args):
         'train.device': device,
         'train.seed': seed,
         'train.total_train_steps': 1000000,
-        'train.batch_size': 128,
+        'train.batch_size': 256,
         'train.agent_ckpt_name': '1211'
     })
     command_args.update({
@@ -63,7 +63,7 @@ def main(args: Args):
         'project': 'test',
         'name': command_args['env.external.data_name']+'_'+command_args['env.external.unreal_dynamics']+'x'+str(command_args['env.external.variety_degree'])+'_seed='+str(command_args['train.seed'])+'_'+nowTime,
         'reinit': False,
-        'mode': 'online'
+        'mode': args.wandb_mode
     }
     command_args.update({'train.wandb': wandb})
 
@@ -112,7 +112,7 @@ def main(args: Args):
     # agent with an empty buffer
     agent = make_agent(config=config, env=sim_env, data=data)
     # envaluate in the real env
-    evaluator = bm_eval(agent=agent, env=real_env, config=config)
+    evaluator = offpolicy_bm_eval(agent=agent, env=real_env, config=config)
     # train in the sim env
     trainer = Trainer(agent=agent, train_data=data, config=config, env=sim_env, evaluator=evaluator)
     trainer.train()
