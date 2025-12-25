@@ -23,6 +23,7 @@ __pycache__
 /test/models/model_free/temp/*
 /test/trainers/temp/*
 example/benchmark/nohup.out
+bak/
 
 # Sphinx documentation
 docs/_build/
