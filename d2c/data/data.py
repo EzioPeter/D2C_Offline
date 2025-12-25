@@ -9,7 +9,7 @@ from typing import Dict, Callable, Tuple, Union, List
 from d2c.envs import BaseEnv, LeaEnv
 from d2c.utils.utils import add_gaussian_noise
 from d2c.utils.replaybuffer import ReplayBuffer
-from d2c.utils.dataloader import D4rlDataLoader, BaseDataLoader, BaseBMLoader
+from d2c.utils.dataloader import D4rlDataLoader, BaseDataLoader, BaseBMLoader, GymDataLoader
 
 
 class BaseData(ABC):
@@ -136,6 +136,15 @@ class Data(BaseData):
             state_normalize,
             reward_normalize,
         )
+    
+    def _gym_data_loader(self) -> GymDataLoader:
+        state_normalize = self._env_cfg.state_normalize
+        reward_normalize = self._env_cfg.reward_normalize
+        return GymDataLoader(
+            self._data_path,
+            state_normalize,
+            reward_normalize,
+        )
 
     @property
     def _data_loader_list(self) -> Dict[str, Callable[..., BaseDataLoader]]:
@@ -143,6 +152,7 @@ class Data(BaseData):
         return dict(
             app=self._app_data_loader,
             d4rl=self._d4rl_data_loader,
+            gym=self._gym_data_loader,
         )
 
     @property

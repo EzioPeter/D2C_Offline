@@ -218,3 +218,50 @@ class D4rlDataLoader(BaseBMLoader):
         demo_c = np.zeros(shape=demo_r.shape)
 
         return demo_s1, demo_a1, demo_s2, demo_a2, demo_r, demo_c, demo_d
+
+
+class GymDataLoader(BaseBMLoader):
+    """Get transitions from the Gym Mujoco dataset.
+    """
+
+    TYPE: ClassVar[str] = 'gym'
+
+    def __init__(
+            self,
+            file_path: str,
+            state_normalize: bool = False,
+            reward_normalize: bool = False) -> None:
+        super(GymDataLoader, self).__init__(
+            file_path,
+            state_normalize,
+            reward_normalize)
+
+    def _load_data(self):
+        dataset_file = h5py.File(self._file_path + '.hdf5', 'r')
+        offline_dataset = {}
+        for k in self.get_keys(dataset_file):
+            try:
+                # first try loading as an array
+                offline_dataset[k] = dataset_file[k][:]
+            except ValueError as e:  # try loading as a scalar
+                offline_dataset[k] = dataset_file[k][()]
+        dataset_file.close()
+        dataset_size = len(offline_dataset['observations'])
+        offline_dataset['terminals'] = np.squeeze(offline_dataset['terminals'])
+        offline_dataset['rewards'] = np.squeeze(offline_dataset['rewards'])
+        nonterminal_steps, = np.where(
+            np.logical_and(
+                np.logical_not(offline_dataset['terminals']),
+                np.arange(dataset_size) < dataset_size - 1))
+        logging.info('Found %d non-terminal steps out of a total of %d steps.' % (
+            len(nonterminal_steps), dataset_size))
+        demo_s1 = offline_dataset['observations'][nonterminal_steps]
+        demo_s2 = offline_dataset['observations'][nonterminal_steps + 1]
+        demo_a1 = offline_dataset['actions'][nonterminal_steps]
+        demo_a2 = offline_dataset['actions'][nonterminal_steps + 1]
+        demo_r = offline_dataset['rewards'][nonterminal_steps]
+        demo_d = offline_dataset['terminals'][nonterminal_steps + 1]
+        # set the 'demo_c' to 0.
+        demo_c = np.zeros(shape=demo_r.shape)
+
+        return demo_s1, demo_a1, demo_s2, demo_a2, demo_r, demo_c, demo_d
