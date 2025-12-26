@@ -339,7 +339,7 @@ class OffPolicyBMEval(BaseEval):
                     if "final_info" in infos:
                         for info in infos["final_info"]:
                             if info and "episode" in info:
-                                results.append(info['episode']['r'])
+                                results.append(infos["final_info"]["episode"]["r"])
                     if done:
                         break
             logging.info('='*20+f' Complete evaluation of {self._n_eval_episodes} episodes! '+'='*20)

@@ -33,7 +33,7 @@ class GymEnv(BaseEnv):
         super(GymEnv, self).__init__()
 
     def _load_model(self):
-        gym_envs = gym.vector.SyncVectorEnv([make_env_bridge(self._env_name, self._model_name, 0, 0, False, "", 0.99)])
+        gym_envs = gym.vector.SyncVectorEnv([make_env_bridge(self._env_name, self._model_name, 0, 0, False, "", 0.99)], autoreset_mode="SameStep")
         self._env = gym_envs
 
     def _set_action_space(self) -> Space:

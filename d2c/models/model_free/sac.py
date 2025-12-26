@@ -209,12 +209,13 @@ class SACAgent(BaseAgent):
             actions, _, _ = self._p_fn(torch.Tensor(obs).to(self._device))
             actions = actions.detach().cpu().numpy()
         next_obs, rewards, terminations, truncations, infos = self._env.step(actions)
-
-        real_next_obs = next_obs.copy()
-        for idx, trunc in enumerate(truncations):
-            if trunc:
-                real_next_obs[idx] = infos["final_observation"][idx]
-        self._train_data.add(obs, real_next_obs, actions, rewards, terminations, infos)
+        
+        for i in range(self._num_envs):
+            if terminations[i] or truncations[i]:
+                actual_next_obs = infos["final_obs"][i]
+            else:
+                actual_next_obs = next_obs[i]
+        self._train_data.add(obs, actual_next_obs, actions, rewards, terminations, infos)
 
         self._current_state = next_obs
 
