@@ -12,7 +12,7 @@ setup(
     version='0.1.0',
     packages=find_packages(),
     install_requires=[
-        'gymnasium==0.28.1',
+        'gymnasium==1.2.3',
         'gymnasium[mujoco]',
         'numpy',
         'pandas',
