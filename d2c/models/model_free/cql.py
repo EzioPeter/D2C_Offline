@@ -56,6 +56,7 @@ class CQLAgent(BaseAgent):
             policy_bc_steps: int = 0,
             actor_bc_weight: float = 0.0,
             grad_clip_norm: Optional[float] = 10.0,
+            log_pi_clip: float = 10.0,
             **kwargs: Any,
     ) -> None:
         self._update_actor_freq = update_actor_freq
@@ -72,6 +73,7 @@ class CQLAgent(BaseAgent):
         self._policy_bc_steps = policy_bc_steps
         self._actor_bc_weight = actor_bc_weight
         self._grad_clip_norm = grad_clip_norm
+        self._log_pi_clip = log_pi_clip
         self._p_info = collections.OrderedDict()
         super(CQLAgent, self).__init__(**kwargs)
         if self._target_entropy == 0.0:
@@ -188,6 +190,7 @@ class CQLAgent(BaseAgent):
         with torch.no_grad():
             _, _, log_pi = self._p_fn(states)
             log_pi = log_pi.sum(dim=-1)
+            log_pi = torch.clamp(log_pi, -self._log_pi_clip, self._log_pi_clip)
         alpha_loss = -(self._log_alpha_fn * (log_pi + self._target_entropy)).mean()
         alpha = self._get_alpha()
 
