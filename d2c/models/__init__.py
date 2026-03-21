@@ -7,25 +7,17 @@ from d2c.models.base import BaseAgent
 from d2c.models.model_free.td3_bc import TD3BCAgent
 from d2c.models.model_free.cql import CQLAgent
 from d2c.models.model_free.doge import DOGEAgent
-from d2c.models.model_free.h2o import H2OAgent
-from d2c.models.model_free.darc import DARCAgent
 from d2c.models.imitation.dmil import DMILAgent
 from d2c.models.imitation.bc import BCAgent
 from d2c.models.model_free.iql import IQLAgent
-from d2c.models.model_free.sac import SACAgent
-from d2c.models.model_free.ppo import PPOAgent
 
 AGENT_MODULES_DICT = {
     'td3_bc': TD3BCAgent,
     'cql': CQLAgent,
     'doge': DOGEAgent,
-    'h2o': H2OAgent,
-    'darc': DARCAgent,  
     'dmil': DMILAgent,
     'bc': BCAgent,
     'iql': IQLAgent,
-    'sac': SACAgent,
-    'ppo': PPOAgent,
 }
 
 

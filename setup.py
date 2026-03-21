@@ -8,11 +8,11 @@ setup(
     name='d2c',
     description="D2C is a Data-driven Control Library based on reinforcement learning.",
     url='https://github.com/EzioPeter/D2C-XJTU.git',
-    python_requires=">=3.11",
+    python_requires=">=3.8",
     version='0.1.0',
     packages=find_packages(),
     install_requires=[
-        'gymnasium==1.2.3',
+        'gymnasium==0.28.1',
         'gymnasium[mujoco]',
         'numpy',
         'pandas',
