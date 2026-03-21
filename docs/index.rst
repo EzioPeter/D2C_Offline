@@ -20,8 +20,6 @@ The current supported offline RL/IL algorithms include (**more to come**):
 
 * :class:`~d2c.models.DOGEAgent` `DOGE <https://arxiv.org/abs/2205.11027.pdf>`_
 
-* :class:`~d2c.models.H2OAgent` `H2O <https://arxiv.org/abs/2206.13464.pdf>`_
-
 * :class:`~d2c.models.IQLAgent` `IQL <https://arxiv.org/pdf/2110.06169.pdf>`_
 
 * :class:`~d2c.models.DMILAgent` `DMIL <https://arxiv.org/abs/2207.00244>`_
