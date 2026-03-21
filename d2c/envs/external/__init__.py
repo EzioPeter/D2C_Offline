@@ -1,7 +1,6 @@
 from typing import Any, Optional, Callable, Union
 from d2c.envs import BaseEnv
 from d2c.envs.external.d4rl import D4rlEnv
-from d2c.envs.external.gym_mujoco import GymEnv
 
 def d4rl_env(config: Any, **kwargs: Any) -> D4rlEnv:
     env_name = config.model_config.env.external.env_name
@@ -9,20 +8,13 @@ def d4rl_env(config: Any, **kwargs: Any) -> D4rlEnv:
     obs_scale = kwargs.get('obs_scale')
     return D4rlEnv(env_name, obs_shift, obs_scale)
 
-def gym_env(config: Any, **kwargs: Any) -> GymEnv:
-    env_name = config.model_config.env.external.env_name
-    model_name = config.model_config.model.model_name
-    return GymEnv(env_name, model_name)
-
 ENV_DICT = {
     'd4rl': D4rlEnv,
-    'gym': GymEnv,
 }
 
 
 ENV_FUNC_DICT = {
     'd4rl': d4rl_env,
-    'gym': gym_env,
 }
 
 
