@@ -29,3 +29,6 @@ bak/
 docs/_build/
 d2c.egg-info/
 example/benchmark/*.log
+
+# algorithms reproduction
+algorithms_reproduction/
