@@ -8,7 +8,8 @@ import torch.nn.functional as F
 from torch import nn, Tensor
 from typing import Any, Dict, Optional, Tuple
 from d2c.models.base import BaseAgent, BaseAgentModule
-from d2c.utils import networks, policies, utils
+from d2c.networks_and_utils_for_agent.mopo_nets_utils import ActorNetwork, CriticNetwork
+from d2c.utils import policies, utils
 
 
 class MOPOAgent(BaseAgent):
@@ -55,7 +56,7 @@ class MOPOAgent(BaseAgent):
         model_params_p = self._model_params.p[0]
 
         def q_net_factory():
-            return networks.CriticNetwork(
+            return CriticNetwork(
                 observation_space=self._observation_space,
                 action_space=self._action_space,
                 fc_layer_params=model_params_q,
@@ -63,7 +64,7 @@ class MOPOAgent(BaseAgent):
             )
 
         def p_net_factory():
-            return networks.ActorNetwork(
+            return ActorNetwork(
                 observation_space=self._observation_space,
                 action_space=self._action_space,
                 fc_layer_params=model_params_p,
@@ -127,7 +128,6 @@ class MOPOAgent(BaseAgent):
         states = batch['s1']
         with torch.no_grad():
             _, _, log_pi = self._p_fn(states)
-            log_pi = log_pi.sum(dim=-1)
         alpha_loss = (-self._log_alpha_fn.exp() * (log_pi + self._target_entropy)).mean()
         self._alpha = self._log_alpha_fn.exp() * self._alpha_multiplier
 
@@ -146,7 +146,6 @@ class MOPOAgent(BaseAgent):
 
         with torch.no_grad():
             _, next_actions, next_log_pi = self._p_fn(next_states)
-            next_log_pi = next_log_pi.sum(dim=-1)
             target_q1 = self._q_target_fns[0](next_states, next_actions)
             target_q2 = self._q_target_fns[1](next_states, next_actions)
             target_q = torch.minimum(target_q1, target_q2)
@@ -175,7 +174,6 @@ class MOPOAgent(BaseAgent):
         alpha = self._alpha.detach()
 
         _, sampled_actions, log_pi = self._p_fn(states)
-        log_pi = log_pi.sum(dim=-1)
         q1_pi = self._q_fns[0](states, sampled_actions)
         q2_pi = self._q_fns[1](states, sampled_actions)
         min_q_pi = torch.minimum(q1_pi, q2_pi)
