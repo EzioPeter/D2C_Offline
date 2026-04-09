@@ -29,7 +29,7 @@ def main():
         'env.learned.with_reward': True,
         'train.data_loader_name': None,
         'train.device': device,
-        'train.seed': 20,
+        'train.seed': 1,
         'train.total_train_steps': 1000000,
         'train.batch_size': 256,
         'train.agent_ckpt_name': 'mopo-halfcheetah-medium-replay',
