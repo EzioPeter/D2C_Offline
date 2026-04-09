@@ -11,6 +11,7 @@ from d2c.models.imitation.dmil import DMILAgent
 from d2c.models.imitation.bc import BCAgent
 from d2c.models.model_free.iql import IQLAgent
 from d2c.models.model_free.sac import SACAgent
+from d2c.models.model_based.mopo import MOPOAgent
 
 AGENT_MODULES_DICT = {
     'td3_bc': TD3BCAgent,
@@ -20,6 +21,7 @@ AGENT_MODULES_DICT = {
     'bc': BCAgent,
     'iql': IQLAgent,
     'sac': SACAgent,
+    'mopo': MOPOAgent,
 }
 
 
@@ -40,7 +42,7 @@ def get_agent(model_name: str) -> Callable[..., BaseAgent]:
         +------------------+------------------------------------------------+
         |  Model-free RL   |  'td3_bc', 'cql', 'doge', 'h2o', 'iql'         |
         +------------------+------------------------------------------------+
-        |  Model-based RL  |                                                |
+        |  Model-based RL  |  'mopo'                                        |
         +------------------+------------------------------------------------+
     """
     return AGENT_MODULES_DICT[model_name]

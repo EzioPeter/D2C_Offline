@@ -70,7 +70,8 @@ class Trainer(BaseTrainer):
     def _train_dynamics(self) -> None:
         d_ckpt_dir = self._train_cfg.dynamics_ckpt_dir
         train_summary_writer, train_summary_dir = self.check_ckpt(d_ckpt_dir)
-        logger_name = '(Dyna)' + self._model_cfg.train.wandb.name
+        wandb_name = self._model_cfg.train.wandb.name
+        logger_name = '(Dyna)' + (wandb_name if wandb_name is not None else self._agent_name)
         _config = copy.deepcopy(self._model_cfg.env.learned)
         _keys = list(_config.keys())
         for k in _keys:
@@ -80,7 +81,7 @@ class Trainer(BaseTrainer):
             # Train the dynamics
             dyna = make_dynamics(self._config, self._train_data)
             step = dyna.global_step
-            while step < self._train_steps:
+            while step < self._train_steps and not getattr(dyna, 'finished', False):
                 dyna.train_step()
                 step = dyna.global_step
                 if step % self._print_freq == 0:
@@ -216,8 +217,6 @@ class Trainer(BaseTrainer):
             _config = ConfigBuilder.main_hyper_params(self._model_cfg)
         _params.update(config=_config)
         return WandbLogger(**_params)
-
-
 
 
 

@@ -73,6 +73,25 @@
         optimizers: {q: ['adam', 1e-3], p: ['adam', 3e-4], alpha: ['adam', 1e-3]},
       }
     },
+    mopo: {
+      train_schedule: ['d', 'agent'],
+      hyper_params: {
+        model_params: {q: [[256, 256], 2], p: [[256, 256],]},
+        optimizers: {q: ['adam', 3e-4], p: ['adam', 3e-4], alpha: ['adam', 3e-4]},
+        rollout_freq: 1000,
+        rollout_batch_size: 50000,
+        rollout_length: 5,
+        real_ratio: 0.05,
+        reward_penalty_coef: 1.0,
+        update_actor_freq: 1,
+        alpha_multiplier: 1.0,
+        alpha_init_value: 0.2,
+        automatic_entropy_tuning: true,
+        backup_entropy: true,
+        target_update_period: 1,
+        grad_clip_norm: 10.0,
+      }
+    },
     ppo: {
       train_schedule: ['agent'],
       hyper_params: {
@@ -104,7 +123,7 @@
     data_file_path: null, state_normalize: false, reward_normalize: false, num_transitions: -1,
     score_normalize: false, score_norm_min: null, score_norm_max: null},
     learned: {
-      // 'mlp', 'prob', 'rnn', 'adm'
+      // 'mlp', 'prob', 'rnn', 'adm', 'mopo'
       dynamic_module_type: 'prob',
       // If the dynamics predict the reward or not.
       with_reward: true,
@@ -117,6 +136,23 @@
       mlp: {
         model_params: [[200, 200], 3],
         optimizers: ['adam', 1e-3],
+      },
+      mopo: {
+        model_params: {
+          hidden_dims: [200, 200, 200, 200],
+          ensemble_size: 7,
+          num_elite: 5,
+          decay_weights: [0.000025, 0.00005, 0.000075, 0.000075, 0.0001],
+          act_fn: 'swish',
+          out_act_fn: 'identity',
+        },
+        optimizers: ['adam', 1e-3],
+        holdout_ratio: 0.1,
+        inc_var_loss: true,
+        use_weight_decay: true,
+        max_model_update_epochs_to_improve: 5,
+        max_model_train_iterations: null,
+        max_train_steps: 800000,
       },
     }
   },

@@ -1,6 +1,7 @@
 from typing import Union, Any, Dict, Type
 from d2c.envs.learned.dynamics.base import BaseDyna
 from d2c.envs.learned.dynamics.mlp import MlpDyna
+from d2c.envs.learned.dynamics.mopo import MopoDyna
 from d2c.envs.learned.dynamics.prob import ProbDyna
 from d2c.utils.replaybuffer import ReplayBuffer
 from d2c.utils.utils import Flags
@@ -21,6 +22,7 @@ def register_dyna(cls: Type[BaseDyna]) -> None:
 
 register_dyna(ProbDyna)
 register_dyna(MlpDyna)
+register_dyna(MopoDyna)
 
 
 def make_dynamics(
@@ -48,6 +50,8 @@ def make_dynamics(
         with_reward=model_cfg.env.learned.with_reward,
         device=model_cfg.train.device,
     )
+    if dyna_name == 'mopo':
+        dyna_args.update(env_name=model_cfg.env.external.env_name)
     dyna_args.update(dyna_params)
 
     dyna = DYNA_DICT[dyna_name](**dyna_args)

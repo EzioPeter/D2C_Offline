@@ -1,64 +1,41 @@
-"""
-Implementation of CQL (Conservative Q-Learning for Offline Reinforcement Learning).
-Paper: https://arxiv.org/abs/2006.04779
-"""
+"""Model-Based Offline Policy Optimization (MOPO)."""
+
 import collections
 import copy
 import math
 import torch
 import torch.nn.functional as F
 from torch import nn, Tensor
-from typing import Tuple, Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 from d2c.models.base import BaseAgent, BaseAgentModule
-from d2c.utils import networks, utils, policies
+from d2c.utils import networks, policies, utils
 
 
-class CQLAgent(BaseAgent):
-    """Implementation of Conservative Q-Learning.
-
-    This implementation follows the repository's offline actor-critic pattern and
-    uses a stochastic policy as in SAC, plus the conservative Q regularization term.
-
-    :param int update_actor_freq: the update frequency of actor network.
-    :param float alpha_multiplier: the multiplier of the entropy coefficient.
-    :param float alpha_init_value: the initial value of the entropy coefficient.
-    :param bool automatic_entropy_tuning: whether to tune the entropy coefficient.
-    :param float target_entropy: the target entropy of the policy.
-    :param bool backup_entropy: whether to use entropy-augmented Bellman backup.
-    :param int target_update_period: the update frequency of target Q networks.
-    :param int cql_n_actions: number of sampled actions per state for CQL regularization.
-    :param float cql_temp: the temperature used in the log-sum-exp conservative loss.
-    :param float cql_alpha: the weight of the conservative loss.
-    :param int policy_bc_steps: the number of initial steps using behavior-cloning
-        regularization in the policy update.
-    :param float grad_clip_norm: gradient clipping threshold. Set to ``None`` to
-        disable clipping.
-
-    .. seealso::
-
-        Please refer to :class:`~d2c.models.base.BaseAgent` for more detailed
-        explanation.
-    """
+class MOPOAgent(BaseAgent):
+    """MOPO agent built on top of D2C's offline SAC-style agent pattern."""
 
     def __init__(
             self,
-            update_actor_freq: int = 2,
+            rollout_freq: int = 1000,
+            rollout_batch_size: int = 50000,
+            rollout_length: int = 5,
+            real_ratio: float = 0.05,
+            reward_penalty_coef: float = 1.0,
+            update_actor_freq: int = 1,
             alpha_multiplier: float = 1.0,
             alpha_init_value: float = 0.2,
             automatic_entropy_tuning: bool = True,
             target_entropy: float = 0.0,
-            backup_entropy: bool = False,
+            backup_entropy: bool = True,
             target_update_period: int = 1,
-            cql_n_actions: int = 10,
-            cql_temp: float = 1.0,
-            cql_alpha: float = 5.0,
-            cql_q_next_with_next_states: bool = True,
-            policy_bc_steps: int = 0,
-            actor_bc_weight: float = 0.0,
             grad_clip_norm: Optional[float] = 10.0,
-            log_pi_clip: float = 10.0,
             **kwargs: Any,
     ) -> None:
+        self._rollout_freq = rollout_freq
+        self._rollout_batch_size = rollout_batch_size
+        self._rollout_length = rollout_length
+        self._real_ratio = real_ratio
+        self._reward_penalty_coef = reward_penalty_coef
         self._update_actor_freq = update_actor_freq
         self._alpha_multiplier = alpha_multiplier
         self._alpha_init_value = alpha_init_value
@@ -66,16 +43,10 @@ class CQLAgent(BaseAgent):
         self._target_entropy = target_entropy
         self._backup_entropy = backup_entropy
         self._target_update_period = target_update_period
-        self._cql_n_actions = cql_n_actions
-        self._cql_temp = cql_temp
-        self._cql_alpha = cql_alpha
-        self._cql_q_next_with_next_states = cql_q_next_with_next_states
-        self._policy_bc_steps = policy_bc_steps
-        self._actor_bc_weight = actor_bc_weight
         self._grad_clip_norm = grad_clip_norm
-        self._log_pi_clip = log_pi_clip
         self._p_info = collections.OrderedDict()
-        super(CQLAgent, self).__init__(**kwargs)
+        self._rollout_info = collections.OrderedDict()
+        super(MOPOAgent, self).__init__(**kwargs)
         if self._target_entropy == 0.0:
             self._target_entropy = -float(self._a_dim)
 
@@ -106,7 +77,7 @@ class CQLAgent(BaseAgent):
                 device=self._device,
             )
 
-        modules = utils.Flags(
+        return utils.Flags(
             p_net_factory=p_net_factory,
             q_net_factory=q_net_factory,
             n_q_fns=n_q_fns,
@@ -114,7 +85,6 @@ class CQLAgent(BaseAgent):
             device=self._device,
             automatic_entropy_tuning=self._automatic_entropy_tuning,
         )
-        return modules
 
     def _build_fns(self) -> None:
         self._agent_module = AgentModule(modules=self._modules)
@@ -145,6 +115,7 @@ class CQLAgent(BaseAgent):
                 lr=opts.alpha[1],
                 weight_decay=self._weight_decays,
             )
+            self._alpha = self._log_alpha_fn.exp() * self._alpha_multiplier
         else:
             self._alpha = torch.tensor(
                 self._alpha_init_value * self._alpha_multiplier,
@@ -152,50 +123,16 @@ class CQLAgent(BaseAgent):
                 device=self._device,
             )
 
-    def _get_alpha(self) -> Tensor:
-        if self._automatic_entropy_tuning:
-            return self._log_alpha_fn.exp() * self._alpha_multiplier
-        return self._alpha
-
-    def _sample_policy_actions(self, states: Tensor, n_actions: int) -> Tuple[Tensor, Tensor]:
-        _, sampled_actions, log_pi = self._p_fn.sample_n(states, n=n_actions)
-        return sampled_actions.transpose(0, 1), log_pi.sum(dim=-1).transpose(0, 1)
-
-    def _sample_random_actions(self, batch_size: int, n_actions: int) -> Tuple[Tensor, Tensor]:
-        action_range = self._a_max - self._a_min
-        random_actions = torch.rand(
-            batch_size, n_actions, self._a_dim, device=self._device
-        ) * action_range + self._a_min
-        random_log_prob = -torch.log(action_range).sum()
-        random_log_probs = torch.ones(
-            (batch_size, n_actions),
-            dtype=random_actions.dtype,
-            device=self._device,
-        ) * random_log_prob
-        return random_actions, random_log_probs
-
-    @staticmethod
-    def _reshape_q_values(q_values: Tensor, batch_size: int, n_actions: int) -> Tensor:
-        return q_values.view(batch_size, n_actions)
-
-    def _compute_q_values(self, q_fn: nn.Module, states: Tensor, actions: Tensor) -> Tensor:
-        batch_size, n_actions, _ = actions.shape
-        state_tile = states.unsqueeze(1).repeat(1, n_actions, 1).view(batch_size * n_actions, -1)
-        action_flat = actions.reshape(batch_size * n_actions, -1)
-        q_values = q_fn(state_tile, action_flat)
-        return self._reshape_q_values(q_values, batch_size, n_actions)
-
     def _build_alpha_loss(self, batch: Dict) -> Tuple[Tensor, Dict]:
         states = batch['s1']
         with torch.no_grad():
             _, _, log_pi = self._p_fn(states)
             log_pi = log_pi.sum(dim=-1)
-            log_pi = torch.clamp(log_pi, -self._log_pi_clip, self._log_pi_clip)
-        alpha_loss = -(self._log_alpha_fn.exp() * (log_pi + self._target_entropy)).mean()
-        alpha = self._get_alpha()
+        alpha_loss = (-self._log_alpha_fn.exp() * (log_pi + self._target_entropy)).mean()
+        self._alpha = self._log_alpha_fn.exp() * self._alpha_multiplier
 
         info = collections.OrderedDict()
-        info['alpha'] = alpha.detach()
+        info['alpha'] = self._alpha.detach().mean()
         info['alpha_loss'] = alpha_loss.detach()
         return alpha_loss, info
 
@@ -205,7 +142,7 @@ class CQLAgent(BaseAgent):
         rewards = batch['reward']
         next_states = batch['s2']
         discounts = batch['dsc']
-        alpha = self._get_alpha().detach()
+        alpha = self._alpha.detach()
 
         with torch.no_grad():
             _, next_actions, next_log_pi = self._p_fn(next_states)
@@ -219,77 +156,33 @@ class CQLAgent(BaseAgent):
 
         q1_pred = self._q_fns[0](states, actions)
         q2_pred = self._q_fns[1](states, actions)
-        q1_bellman_loss = F.mse_loss(q1_pred, td_target)
-        q2_bellman_loss = F.mse_loss(q2_pred, td_target)
-
-        batch_size = states.shape[0]
-        random_actions, random_log_probs = self._sample_random_actions(batch_size, self._cql_n_actions)
-        curr_actions, curr_log_pi = self._sample_policy_actions(states, self._cql_n_actions)
-        next_actions_samples, next_log_pi_samples = self._sample_policy_actions(next_states, self._cql_n_actions)
-        curr_actions = curr_actions.detach()
-        curr_log_pi = curr_log_pi.detach()
-        next_actions_samples = next_actions_samples.detach()
-        next_log_pi_samples = next_log_pi_samples.detach()
-
-        q1_rand = self._compute_q_values(self._q_fns[0], states, random_actions) - random_log_probs
-        q2_rand = self._compute_q_values(self._q_fns[1], states, random_actions) - random_log_probs
-        q1_curr = self._compute_q_values(self._q_fns[0], states, curr_actions) - curr_log_pi
-        q2_curr = self._compute_q_values(self._q_fns[1], states, curr_actions) - curr_log_pi
-        q_next_states = next_states if self._cql_q_next_with_next_states else states
-        q1_next = self._compute_q_values(self._q_fns[0], q_next_states, next_actions_samples) - next_log_pi_samples
-        q2_next = self._compute_q_values(self._q_fns[1], q_next_states, next_actions_samples) - next_log_pi_samples
-
-        q1_cat = torch.cat([q1_rand, q1_curr, q1_next], dim=1)
-        q2_cat = torch.cat([q2_rand, q2_curr, q2_next], dim=1)
-        cql_q1_loss = (
-            torch.logsumexp(q1_cat / self._cql_temp, dim=1).mean() * self._cql_temp
-            - q1_pred.mean()
-        )
-        cql_q2_loss = (
-            torch.logsumexp(q2_cat / self._cql_temp, dim=1).mean() * self._cql_temp
-            - q2_pred.mean()
-        )
-
-        q_loss = (
-            q1_bellman_loss
-            + q2_bellman_loss
-            + self._cql_alpha * (cql_q1_loss + cql_q2_loss)
-        )
+        q1_loss = F.mse_loss(q1_pred, td_target)
+        q2_loss = F.mse_loss(q2_pred, td_target)
+        q_loss = q1_loss + q2_loss
 
         info = collections.OrderedDict()
         info['Q1'] = q1_pred.detach().mean()
         info['Q2'] = q2_pred.detach().mean()
         info['Q_target'] = td_target.detach().mean()
-        info['Q1_bellman_loss'] = q1_bellman_loss.detach()
-        info['Q2_bellman_loss'] = q2_bellman_loss.detach()
-        info['cql_Q1_loss'] = cql_q1_loss.detach()
-        info['cql_Q2_loss'] = cql_q2_loss.detach()
+        info['Q1_loss'] = q1_loss.detach()
+        info['Q2_loss'] = q2_loss.detach()
         info['Q_loss'] = q_loss.detach()
-        info['r_mean'] = rewards.detach().mean()
-        info['dsc'] = discounts.detach().mean()
+        info['reward_mean'] = rewards.detach().mean()
         return q_loss, info
 
     def _build_p_loss(self, batch: Dict) -> Tuple[Tensor, Dict]:
         states = batch['s1']
-        actions = batch['a1']
-        alpha = self._get_alpha().detach()
+        alpha = self._alpha.detach()
 
         _, sampled_actions, log_pi = self._p_fn(states)
         log_pi = log_pi.sum(dim=-1)
         q1_pi = self._q_fns[0](states, sampled_actions)
         q2_pi = self._q_fns[1](states, sampled_actions)
         min_q_pi = torch.minimum(q1_pi, q2_pi)
-        rl_loss = (alpha * log_pi - min_q_pi).mean()
-        policy_log_prob = self._p_fn.get_log_density(states, actions).sum(dim=-1)
-        bc_loss = -policy_log_prob.mean()
-        p_loss = rl_loss + self._actor_bc_weight * bc_loss
-        if self._global_step < self._policy_bc_steps:
-            p_loss = bc_loss
+        p_loss = (alpha * log_pi - min_q_pi).mean()
 
         info = collections.OrderedDict()
         info['actor_loss'] = p_loss.detach()
-        info['actor_rl_loss'] = rl_loss.detach()
-        info['actor_bc_loss'] = bc_loss.detach()
         info['log_pi'] = log_pi.detach().mean()
         info['Q_in_actor_loss'] = min_q_pi.detach().mean()
         return p_loss, info
@@ -321,6 +214,91 @@ class CQLAgent(BaseAgent):
         self._alpha_optimizer.step()
         return info
 
+    @staticmethod
+    def _cat_batch(real_batch: Optional[Dict], model_batch: Optional[Dict]) -> Dict:
+        if real_batch is None:
+            return model_batch
+        if model_batch is None:
+            return real_batch
+        mixed_batch = collections.OrderedDict()
+        for key in real_batch.keys():
+            mixed_batch[key] = torch.cat([real_batch[key], model_batch[key]], dim=0)
+        return mixed_batch
+
+    def _rollout_transitions(self) -> None:
+        if self._empty_dataset is None or self._env.dynamics_model is None:
+            return
+        init_batch = self._train_data.sample_batch(self._rollout_batch_size)
+        observations = init_batch['s1']
+        rollout_steps = 0
+        total_transitions = 0
+        penalty_means = []
+        reward_means = []
+
+        for _ in range(self._rollout_length):
+            with torch.no_grad():
+                _, actions, _ = self._p_fn(observations)
+                next_obs, rewards, terminals, info = self._env.dynamics_model.predict(
+                    observations,
+                    actions,
+                    reward_penalty_coef=self._reward_penalty_coef,
+                )
+                _, next_actions, _ = self._p_fn(next_obs)
+            self._empty_dataset.add_transitions(
+                state=observations,
+                action=actions,
+                next_state=next_obs,
+                next_action=next_actions,
+                reward=rewards,
+                done=terminals,
+            )
+            rollout_steps += 1
+            total_transitions += observations.shape[0]
+            penalty_means.append(info['penalty'].detach().mean())
+            reward_means.append(info['raw_rewards'].detach().mean())
+            nonterm_mask = terminals < 0.5
+            if torch.sum(nonterm_mask) == 0:
+                break
+            observations = next_obs[nonterm_mask]
+
+        if rollout_steps > 0:
+            self._rollout_info['model_rollout_steps'] = torch.tensor(
+                float(rollout_steps),
+                dtype=torch.float32,
+                device=self._device,
+            )
+            self._rollout_info['model_rollout_transitions'] = torch.tensor(
+                float(total_transitions),
+                dtype=torch.float32,
+                device=self._device,
+            )
+            self._rollout_info['model_buffer_size'] = torch.tensor(
+                float(self._empty_dataset.size),
+                dtype=torch.float32,
+                device=self._device,
+            )
+            self._rollout_info['model_penalty'] = torch.stack(penalty_means).mean()
+            self._rollout_info['model_reward'] = torch.stack(reward_means).mean()
+
+    def _get_train_batch(self) -> Dict:
+        if self._global_step % self._rollout_freq == 0:
+            self._rollout_transitions()
+
+        real_batch_size = int(self._batch_size * self._real_ratio)
+        real_batch_size = min(real_batch_size, self._batch_size)
+        model_batch_size = self._batch_size - real_batch_size
+
+        if self._empty_dataset is None or self._empty_dataset.size == 0 or model_batch_size == 0:
+            return self._train_data.sample_batch(self._batch_size)
+
+        real_batch = None
+        model_batch = None
+        if real_batch_size > 0:
+            real_batch = self._train_data.sample_batch(real_batch_size)
+        if model_batch_size > 0:
+            model_batch = self._empty_dataset.sample_batch(model_batch_size)
+        return self._cat_batch(real_batch, model_batch)
+
     def _optimize_step(self, batch: Dict) -> Dict:
         info = collections.OrderedDict()
         q_info = self._optimize_q(batch)
@@ -336,11 +314,11 @@ class CQLAgent(BaseAgent):
         if self._global_step % self._target_update_period == 0:
             self._update_target_fns(self._q_fns, self._q_target_fns)
 
+        info.update(self._rollout_info)
         return info
 
     def _build_test_policies(self) -> None:
-        policy = policies.DeterministicSoftPolicy(a_network=self._p_fn)
-        self._test_policies['main'] = policy
+        self._test_policies['main'] = policies.DeterministicSoftPolicy(a_network=self._p_fn)
 
     def save(self, ckpt_name: str) -> None:
         torch.save(self._agent_module.state_dict(), ckpt_name + '.pth')
@@ -353,7 +331,7 @@ class CQLAgent(BaseAgent):
 
 
 class AgentModule(BaseAgentModule):
-    """Container of all trainable modules used by CQL."""
+    """Container of trainable MOPO modules."""
 
     def _build_modules(self) -> None:
         device = self._net_modules.device

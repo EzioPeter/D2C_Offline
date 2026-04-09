@@ -13,6 +13,7 @@ The current supported offline RL/IL algorithms include (**more to come**):
 - [Conservative Q-Learning (CQL)](https://arxiv.org/abs/2006.04779)
 - [Distance-Sensitive Offline Reinforcement Learning (DOGE)](https://arxiv.org/abs/2205.11027.pdf)
 - [Offline Reinforcement Learning with Implicit Q-Learning (IQL)](https://arxiv.org/pdf/2110.06169.pdf)
+- [Model-Based Offline Policy Optimization (MOPO)](https://arxiv.org/abs/2005.13239)
 - [Discriminator-Guided Model-Based Offline Imitation Learning (DMIL)](https://arxiv.org/abs/2207.00244)
 - [Behavior Cloning (BC)](http://www.cse.unsw.edu.au/~claude/papers/MI15.pdf)
 

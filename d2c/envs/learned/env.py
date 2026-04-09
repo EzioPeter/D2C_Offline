@@ -7,6 +7,7 @@ from gymnasium.spaces import Space, Box
 from d2c.envs import BaseEnv
 from d2c.envs.learned.dynamics import DYNA_DICT
 from d2c.envs.learned.dynamics import make_dynamics
+from d2c.envs.learned.dynamics.mopo_terminals import get_mopo_terminal_fn
 from d2c.utils import utils
 
 
@@ -54,6 +55,8 @@ class LeaEnv(BaseEnv):
                 print('Please define the reward function first if the dynamics model do not predict reward!')
                 raise
         self._done_fn = config.app_config.done_fn
+        if self._dyna_type == 'mopo':
+            self._done_fn = get_mopo_terminal_fn(self._env_cfg.external.env_name)
         self._device = config.model_config.train.device
         self.state = None
         self.action_past = None
@@ -91,7 +94,7 @@ class LeaEnv(BaseEnv):
         s_dist = None
         if 'dist' in info:
             s_dist = info['dist']
-        s_p = [x.cpu().numpy() for x in s_p]
+        s_p = [x.detach().cpu().numpy() for x in s_p]
         if return_dist:
             # assert s_dist is not None
             return s_p, s_dist
@@ -206,7 +209,9 @@ class LeaEnv(BaseEnv):
 
     def get_dynamics(self):
         """Get the dynamics model."""
-        return self._dynamics_model.dyna_nets
+        if hasattr(self._dynamics_model, 'dyna_nets'):
+            return self._dynamics_model.dyna_nets
+        return self._dynamics_model
 
     @property
     def r_fn(self):
@@ -218,7 +223,16 @@ class LeaEnv(BaseEnv):
         """
         The number of the dynamics models.
         """
-        return len(self._dynamics_model.dyna_nets)
+        if hasattr(self._dynamics_model, 'dyna_nets'):
+            return len(self._dynamics_model.dyna_nets)
+        if hasattr(self._d_fns, 'ensemble_size'):
+            return self._d_fns.ensemble_size
+        raise AttributeError('The dynamics model does not expose ensemble members.')
+
+    @property
+    def dynamics_model(self):
+        """The loaded dynamics model instance."""
+        return self._dynamics_model
 
     @property
     def dynamics_module(self):
@@ -240,8 +254,6 @@ class LeaEnv(BaseEnv):
         If the dynamics model predict the reward or not.
         """
         return self._with_reward
-
-
 
 
 

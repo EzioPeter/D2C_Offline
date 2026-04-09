@@ -56,7 +56,7 @@ Prefer concrete file paths over abstract descriptions.
 ## Execution Workflow
 
 1. Identify the algorithm family and target folder in `d2c/models`.
-2. Find the closest D2C reference implementation. Use the current SAC algorithm in the D2C repository as the base policy, and reuse modules from the current SAC implementation whenever possible.
+2. Find the closest D2C reference implementation. Use the current SAC algorithm in the D2C repository as the base policy, and must reuse modules from the current SAC implementation. Make sure the mopo's sac alpha loss follows the same with the sac alpha loss in the D2C sac implementation. Do not use some function like `get_alpha()` to simplify the implementation. Just follow the same logic as the sac implementation in D2C
 3. Read the source entrypoint and reconstruct the true training loop.
 4. List every source module that changes behavior, not just imports.
 5. Map each source module into one of four buckets:
@@ -93,6 +93,7 @@ When reproducing `algorithms_reproduction/mopo_pytorch/mopo`, use this mapping a
 
 Before claiming reproduction is complete, verify:
 
+- check the mopo's sac alpha loss follows the same with the sac alpha loss in the D2C sac implementation. Do not use some function like `get_alpha()` to simplify the implementation. Just follow the same logic as the sac implementation in D2C
 - dynamics are trained before policy optimization
 - dynamics training follows the dataset-batch iterator style used in `algorithms_reproduction/mopo_pytorch/mopo/algo/mopo.py`
 - `update_best_snapshots` succeeds during dynamics training

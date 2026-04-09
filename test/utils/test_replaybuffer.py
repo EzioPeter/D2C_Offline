@@ -53,9 +53,9 @@ class TestReplayBuffer:
 
         assert rb.capacity == max_size
         assert rb.size == max_size
+        assert rb._ptr == 501
 
 
 if __name__ == '__main__':
     pytest.main(__file__)
-
 
