@@ -10,6 +10,7 @@ from d2c.models.model_free.doge import DOGEAgent
 from d2c.models.imitation.dmil import DMILAgent
 from d2c.models.imitation.bc import BCAgent
 from d2c.models.model_free.iql import IQLAgent
+from d2c.models.model_free.sac import SACAgent
 
 AGENT_MODULES_DICT = {
     'td3_bc': TD3BCAgent,
@@ -18,6 +19,7 @@ AGENT_MODULES_DICT = {
     'dmil': DMILAgent,
     'bc': BCAgent,
     'iql': IQLAgent,
+    'sac': SACAgent,
 }
 
 
