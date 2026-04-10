@@ -11,6 +11,8 @@ from example.benchmark.config import make_config
 
 logging.basicConfig(level=logging.INFO)
 
+import os
+os.environ["WANDB_BASE_URL"] = "https://api.bandw.top"
 
 def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -19,7 +21,7 @@ def main():
         prefix + 'benchmark_name': 'd4rl',
         prefix + 'data_source': 'mujoco',
         prefix + 'env_name': 'HalfCheetah-v2',
-        prefix + 'data_name': 'halfcheetah_medium_replay-v2',
+        prefix + 'data_name': 'halfcheetah_medium_expert-v2',
         prefix + 'state_normalize': False,
         prefix + 'score_normalize': True,
     }
@@ -32,8 +34,8 @@ def main():
         'train.seed': 1,
         'train.total_train_steps': 1000000,
         'train.batch_size': 256,
-        'train.agent_ckpt_name': 'mopo-halfcheetah-medium-replay',
-        'train.dynamics_ckpt_name': 'mopo-dynamics-halfcheetah-medium-replay',
+        'train.agent_ckpt_name': 'mopo-halfcheetah-medium-expert',
+        'train.dynamics_ckpt_name': 'mopo-dynamics-halfcheetah-medium-expert',
     })
 
     config = make_config(command_args)

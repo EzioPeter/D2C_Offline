@@ -442,6 +442,7 @@ class MopoDyna(BaseDyna):
     def transform_obs_action(self, obs: Tensor, action: Tensor) -> Tuple[Tensor, Tensor]:
         return self._obs_normalizer.transform(obs), self._act_normalizer.transform(action)
 
+    @torch.no_grad()
     def eval_data(self, update_elite_models: bool = False) -> Tuple[np.ndarray, None]:
         test_batch = self._train_data.get_batch_indices(self._test_indices)
         s1 = test_batch['s1']
